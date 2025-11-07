@@ -2,7 +2,7 @@
   "name": "流年的小手机",
   "short_name": "流年的小手机",
   "description": "fvv流年的小手机",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "start_url": "./index.html",
   "display": "fullscreen",
   "background_color": "#ffffff",

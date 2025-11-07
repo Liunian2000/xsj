@@ -174,6 +174,27 @@ function updateLogSizeDisplay() {
     logSizeElement.textContent = `${sizeText}，共 ${debugLog.length} 条记录`;
 }
 
+// 显示许可证详情
+function showLicenseDetails() {
+    const licenseText = `
+本软件采用自定义许可证，具体条款如下：
+
+【允许的行为】
+1. 二次传播：允许自由传播本软件的原始版本
+2. 非盈利性二次修改：允许以非盈利性目的对本软件进行修改，但需满足以下条件：
+   - 获得原作者（流年）的授权
+   - 在新项目中明确添加原作者的署名
+
+【限制的行为】
+1. 盈利性二次修改与分发：完全以盈利为目的的二次修改与二次分发，必须获得原作者（流年）的明确授权
+
+【联系方式】
+如需授权，请联系原作者流年。
+    `;
+    
+    alert(licenseText.trim());
+}
+
 // 显示数据管理屏幕
 function showDataSettings() {
     showScreen('data-settings-screen');
