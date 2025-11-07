@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>流年的小手机</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="LiunianPhone">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- 添加marked.js库用于Markdown渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 添加KaTeX库用于数学公式渲染 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+</head>
+<body>
+    <div id="phone-screen">
+        <!-- 状态栏 -->
+        <div id="status-bar">
+            <span id="status-bar-time">12:00</span>
+            <div class="battery-container">
+                <div class="battery-icon">
+                    <div class="battery-level" style="width: 80%"></div>
+                </div>
+                <span class="battery-text">80%</span>
+            </div>
+        </div>
+        
+        <!-- 主屏幕 -->
+        <div id="home-screen" class="screen active">
+            <div id="clock-container">
+                <div id="main-time">12:00</div>
+                <div id="main-date">1月1日 星期一</div>
+            </div>
+            <div id="app-grid">
+                <div class="app-row">
+                    <div class="app-icon" onclick="showCharacterList()">
+                        <div class="icon-bg">💬</div>
+                        <span class="label">聊天</span>
+                    </div>
+                    <div class="app-icon" onclick="showSettings()">
+                        <div class="icon-bg">⚙️</div>
+                        <span class="label">设置</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 角色列表屏幕 -->
+        <div id="character-list-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+                <span>选择角色</span>
+                <span class="add-btn" onclick="showAddCharacter()">+</span>
+            </div>
+            <div id="character-list" class="list-container">
+                <!-- 角色列表将在这里动态生成 -->
+            </div>
+        </div>
+        
+        <!-- 聊天屏幕 -->
+        <div id="chat-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('character-list-screen')">‹</span>
+                <span id="chat-character-name">角色名称</span>
+                <span class="action-btn" onclick="showEditCharacterModal()">编辑</span>
+            </div>
+            <div id="chat-messages" class="chat-messages">
+                <!-- 聊天消息将在这里动态生成 -->
+            </div>
+            <div id="chat-input-area">
+                <div class="input-container">
+                    <input type="text" id="chat-input" placeholder="输入消息..." onkeypress="handleInputKeyPress(event)">
+                    <button id="send-btn" onclick="sendMessage()">发送</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加角色屏幕 -->
+        <div id="add-character-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('character-list-screen')">‹</span>
+                <span>添加角色</span>
+                <span class="save-btn" onclick="saveCharacter()">保存</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="character-name">角色名称</label>
+                    <input type="text" id="character-name" placeholder="输入角色名称">
+                </div>
+                <div class="form-group">
+                    <label for="character-persona">角色设定</label>
+                    <textarea id="character-persona" placeholder="描述角色的性格、背景等信息"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="character-avatar">角色头像</label>
+                    <div class="avatar-upload-container">
+                        <div class="avatar-preview" id="avatar-preview">
+                            <span class="avatar-placeholder">暂无头像</span>
+                        </div>
+                        <input type="file" id="character-avatar-file" accept="image/*" style="display: none;" onchange="handleAvatarUpload(event)">
+                        <button type="button" class="android-button" onclick="document.getElementById('character-avatar-file').click()">选择图片</button>
+                        <input type="text" id="character-avatar" placeholder="或输入头像URL" style="display: none;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 设置屏幕 -->
+        <div id="settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('home-screen')">‹</span>
+                <span>设置</span>
+            </div>
+            <div class="settings-menu">
+                <div class="menu-item" onclick="showApiSettings()">
+                    <span>API设置</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showPromptSettings()">
+                    <span>提示词设置</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showReplySettings()">
+                    <span>回复策略</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showDisplaySettings()">
+                    <span>显示设置</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showDebugSettings()">
+                    <span>调试信息</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showDataSettings()">
+                    <span>数据管理</span>
+                    <span class="arrow">›</span>
+                </div>
+                <div class="menu-item" onclick="showAbout()">
+                    <span>关于</span>
+                    <span class="arrow">›</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API设置屏幕 -->
+        <div id="api-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>API设置</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="api-url">API地址</label>
+                    <input type="text" id="api-url" placeholder="输入API地址">
+                </div>
+                <div class="form-group">
+                    <label for="api-key">API密钥</label>
+                    <input type="password" id="api-key" placeholder="输入API密钥">
+                </div>
+                <div class="form-group">
+                    <label for="api-model">AI模型</label>
+                    <div class="model-input-container">
+                        <button type="button" class="android-button fetch-models-btn" onclick="fetchModels()">获取模型列表</button>
+                    </div>
+                    <div class="model-input-container">
+                        <input type="text" id="api-model" placeholder="输入AI模型名称">
+                    </div>
+                    <div id="model-list-container" style="display: none; margin-top: 10px;">
+                        <select id="model-select" class="model-select">
+                            <option value="">从列表中选择模型</option>
+                        </select>
+                        <div class="model-custom-input-container" style="margin-top: 10px; display: none;">
+                            <input type="text" id="custom-model" placeholder="或输入自定义模型ID">
+                            <button type="button" class="android-button" onclick="useCustomModel()">使用</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="temperature">Temperature (0-2)</label>
+                    <input type="number" id="temperature" min="0" max="2" step="0.1" value="0.8" placeholder="0.8">
+                </div>
+                <div class="form-group">
+                    <label for="top-p">Top P (0-1)</label>
+                    <input type="number" id="top-p" min="0" max="1" step="0.1" value="0.9" placeholder="0.9">
+                </div>
+                <div class="form-group">
+                    <label for="context-count">上下文记忆条数 (0-1000)</label>
+                    <input type="number" id="context-count" min="0" max="1000" step="1" value="20" placeholder="20">
+                </div>
+                <button class="android-button android-button-primary" onclick="saveSettings()">保存</button>
+            </div>
+        </div>
+        
+        <!-- 提示词设置屏幕 -->
+        <div id="prompt-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>提示词设置</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label for="role-play-prompt">角色扮演提示词</label>
+                    <textarea id="role-play-prompt" placeholder="输入角色扮演的系统提示词" rows="4">请你扮演一个角色，严格按照以下设定进行对话和回应：</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>启用角色扮演模式</span>
+                        <div class="switch">
+                            <input type="checkbox" id="enable-role-play" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>启用多消息输出</span>
+                        <div class="switch">
+                            <input type="checkbox" id="enable-multi-message" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                    <p class="form-hint">启用后，AI会将回复拆分为多条消息，使对话更加自然流畅</p>
+                </div>
+                <div class="form-group" id="multi-message-format-group">
+                    <label for="multi-message-separator">消息分隔符</label>
+                    <input type="text" id="multi-message-separator" value="@@@@" placeholder="输入消息分隔符">
+                    <p class="form-hint">AI将使用此分隔符拆分消息，默认为@@@@</p>
+                </div>
+                <button class="android-button android-button-primary" onclick="savePromptSettings()">保存</button>
+            </div>
+        </div>
+        
+        <!-- 回复策略设置屏幕 -->
+        <div id="reply-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>回复策略</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>启用延迟发送</span>
+                        <div class="switch">
+                            <input type="checkbox" id="enable-delay-send" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                    <p class="form-hint">启用后，系统会等待一段时间再发送消息，让您有时间输入多条消息</p>
+                </div>
+                <div class="form-group">
+                    <label for="reply-delay">回复延迟时间（秒）</label>
+                    <input type="number" id="reply-delay" min="3" max="60" step="1" value="15" placeholder="15">
+                    <p class="form-hint">设置等待时间，在此时间内输入的消息将被合并发送</p>
+                </div>
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>显示延迟提示（已禁用）</span>
+                        <div class="switch">
+                            <input type="checkbox" id="show-delay-hint" disabled>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                    <p class="form-hint">提示功能已禁用，延迟发送将在后台无感运行</p>
+                </div>
+                <button class="android-button android-button-primary" onclick="saveReplySettings()">保存</button>
+            </div>
+        </div>
+        
+        <!-- 显示设置屏幕 -->
+        <div id="display-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>显示设置</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>全屏模式</span>
+                        <div class="switch">
+                            <input type="checkbox" id="fullscreen-toggle" checked>
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label for="resolution-width">屏幕宽度</label>
+                    <input type="number" id="resolution-width" placeholder="输入屏幕宽度" value="3200">
+                </div>
+                <div class="form-group">
+                    <label for="resolution-height">屏幕高度</label>
+                    <input type="number" id="resolution-height" placeholder="输入屏幕高度" value="1440">
+                </div>
+                <div class="form-group">
+                    <label for="aspect-ratio">屏幕比例</label>
+                    <select id="aspect-ratio">
+                        <option value="3200/1440">3200×1440 (22:10)</option>
+                        <option value="16/9">16:9</option>
+                        <option value="18/9">18:9</option>
+                        <option value="19.5/9">19.5:9</option>
+                        <option value="20/9">20:9</option>
+                        <option value="21/9">21:9</option>
+                        <option value="4/3">4:3</option>
+                        <option value="3/2">3:2</option>
+                        <option value="1/1">1:1 (正方形)</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+                <button class="android-button android-button-primary" onclick="saveSettings()">保存</button>
+            </div>
+        </div>
+        
+        <!-- 调试信息设置屏幕 -->
+        <div id="debug-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>调试信息</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label class="switch-label">
+                        <span>启用调试日志</span>
+                        <div class="switch">
+                            <input type="checkbox" id="enable-debug-log">
+                            <span class="slider"></span>
+                        </div>
+                    </label>
+                    <p class="form-hint">启用后，系统将记录API请求/响应和设置变更等调试信息</p>
+                </div>
+                <div class="form-group">
+                    <label for="log-retention-days">日志保留天数</label>
+                    <input type="number" id="log-retention-days" min="1" max="30" step="1" value="7" placeholder="7">
+                    <p class="form-hint">设置日志保留的天数，超过此天数的日志将被自动清理</p>
+                </div>
+                <div class="form-group">
+                    <label>当前日志大小</label>
+                    <div id="current-log-size" style="font-size: 14px; color: var(--text-secondary);">计算中...</div>
+                </div>
+                <div class="form-group">
+                    <button class="android-button" onclick="clearDebugLog()">清空日志</button>
+                    <button class="android-button android-button-primary" onclick="exportDebugLog()">导出日志</button>
+                </div>
+                <button class="android-button android-button-primary" onclick="saveDebugSettings()">保存设置</button>
+            </div>
+        </div>
+        
+        <!-- 数据管理屏幕 -->
+        <div id="data-settings-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>数据管理</span>
+            </div>
+            <div class="form-container">
+                <div class="form-group">
+                    <label>导出数据</label>
+                    <p class="form-hint">导出所有设置、角色和聊天记录，保存为JSON文件</p>
+                    <button class="android-button android-button-primary" onclick="exportAllData()">导出所有数据</button>
+                </div>
+                <div class="form-group">
+                    <label>导入数据</label>
+                    <p class="form-hint">从JSON文件导入数据。注意：导入将清空当前所有数据并替换为导入的数据。</p>
+                    <input type="file" id="import-data-file" accept=".json" style="display: none;" onchange="handleImportData(event)">
+                    <button class="android-button" onclick="document.getElementById('import-data-file').click()">选择文件导入</button>
+                </div>
+                <div class="form-group">
+                    <label>清空数据</label>
+                    <p class="form-hint">清空所有本地数据，包括设置、角色和聊天记录。此操作不可恢复！</p>
+                    <button class="android-button android-button-danger" onclick="clearAllData()">清空所有数据</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 关于屏幕 -->
+        <div id="about-screen" class="screen">
+            <div class="header">
+                <span class="back-btn" onclick="showScreen('settings-screen')">‹</span>
+                <span>关于</span>
+            </div>
+            <div class="about-container">
+                <div class="app-icon-large">
+                    <div class="icon-bg">📱</div>
+                </div>
+                <h2 class="app-title">流年的小手机</h2>
+                <div class="about-info">
+                    <div class="info-item">
+                        <span class="info-label">作者：</span>
+                        <span class="info-value">流年</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">当前版本：</span>
+                        <span class="info-value">2.1.0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Q群：</span>
+                        <span class="info-value">931175362</span>
+                    </div>
+                </div>
+                <div class="copyright">
+                    <p>© 2024 流年. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 编辑角色模态框 -->
+        <div id="edit-character-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span>编辑角色</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-character-name">角色名称</label>
+                        <input type="text" id="edit-character-name" placeholder="输入角色名称">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-character-persona">角色设定</label>
+                        <textarea id="edit-character-persona" placeholder="描述角色的性格、背景等信息"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-character-avatar">角色头像</label>
+                        <div class="avatar-upload-container">
+                            <div class="avatar-preview" id="edit-avatar-preview">
+                                <span class="avatar-placeholder">暂无头像</span>
+                            </div>
+                            <input type="file" id="edit-character-avatar-file" accept="image/*" style="display: none;" onchange="handleEditAvatarUpload(event)">
+                            <button type="button" class="android-button" onclick="document.getElementById('edit-character-avatar-file').click()">选择图片</button>
+                            <input type="text" id="edit-character-avatar" placeholder="或输入头像URL" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="cancel" onclick="closeEditCharacterModal()">取消</button>
+                    <button class="save" onclick="saveEditedCharacter()">保存</button>
+                    <button class="btn-danger" onclick="clearCurrentCharacterChat()" style="margin-left: 10px;">清空聊天记录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 隐藏菜单 -->
+    <div id="hidden-menu">
+        <button onclick="toggleFullscreen()" title="全屏切换">⛶</button>
+        <button onclick="showScreen('home-screen')" title="主页">🏠</button>
+        <button onclick="showCharacterList()" title="聊天">💬</button>
+        <button onclick="showSettings()" title="设置">⚙️</button>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

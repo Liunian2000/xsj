@@ -1,0 +1,23 @@
+{
+  "name": "流年的小手机",
+  "short_name": "流年的小手机",
+  "description": "fvv流年的小手机",
+  "version": "2.1.1",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "background_color": "#ffffff",
+  "theme_color": "#4a6fa5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgdmlld0JveD0iMCAwIDE5MiAxOTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiByeD0iMjQiIGZpbGw9IiM0YTY2YTUiLz4KPHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeD0iNDYiIHk9IjQ2Ij4KPHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIHJ4PSIxOCIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iNTAiIGN5PSIyMCIgcj0iNSIgZmlsbD0iIzRhNjZhNSIvPgo8cmVjdCB4PSIzMCIgeT0iMzAiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcng9IjQiIGZpbGw9IiM0YTY2YTUiLz4KPGNpcmNsZSBjeD0iNTAiIGN5PSI4MCIgcj0iNSIgZmlsbD0iIzRhNjZhNSIvPgo8L3N2Zz4KPC9zdmc+",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiByeD0iNjQiIGZpbGw9IiM0YTY2YTUiLz4KPHN2ZyB3aWR0aD0iMjYwIiBoZWlnaHQ9IjI2MCIgdmlld0JveD0iMCAwIDI2MCAyNjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeD0iMTI2IiB5PSIxMjYiPgo8cmVjdCB3aWR0aD0iMjYwIiBoZWlnaHQ9IjI2MCIgcng9IjQ2IiBmaWxsPSJ3aGl0ZSIvPgo8Y2lyY2xlIGN4PSIxMzAiIGN5PSI1MiIgcj0iMTMiIGZpbGw9IiM0YTY2YTUiLz4KPHJlY3QgeD0iNzgiIHk9Ijc4IiB3aWR0aD0iMTA0IiBoZWlnaHQ9IjEwNCIgcng9IjEwIiBmaWxsPSIjNGE2NmE1Ii8+CjxjaXJjbGUgY3g9IjEzMCIgY3k9IjIwOCIgcj0iMTMiIGZpbGw9IiM0YTY2YTUiLz4KPC9zdmc+Cjwvc3ZnPg==",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
