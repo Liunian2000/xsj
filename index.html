@@ -76,6 +76,26 @@
                 <div class="input-container">
                     <input type="text" id="chat-input" placeholder="输入消息..." onkeypress="handleInputKeyPress(event)">
                     <button id="send-btn" onclick="sendMessage()">发送</button>
+                    <button id="plus-btn" onclick="toggleChatMenu()">+</button>
+                </div>
+                <!-- 聊天菜单 -->
+                <div id="chat-menu" class="chat-menu">
+                    <div class="menu-item" onclick="sendImage()">
+                        <span class="menu-icon">🖼️</span>
+                        <span class="menu-text">发送图片</span>
+                    </div>
+                    <div class="menu-item" onclick="sendFile()">
+                        <span class="menu-icon">📎</span>
+                        <span class="menu-text">发送文件</span>
+                    </div>
+                    <div class="menu-item" onclick="startVoiceRecord()">
+                        <span class="menu-icon">🎤</span>
+                        <span class="menu-text">语音输入</span>
+                    </div>
+                    <div class="menu-item" onclick="clearCurrentChat()">
+                        <span class="menu-icon">🗑️</span>
+                        <span class="menu-text">清空对话</span>
+                    </div>
                 </div>
             </div>
         </div>

@@ -618,11 +618,11 @@ function renderChatMessages() {
             const splitMessages = splitMultiMessages(message.content);
             splitMessages.forEach((msg, index) => {
                 // 渲染每条分割后的消息
-                renderSingleMessage(message.sender, msg.trim());
+                renderSingleMessage(message.sender, msg.trim(), message.messageType, message.fileInfo);
             });
         } else {
             // 普通消息，直接渲染
-            renderSingleMessage(message.sender, message.content);
+            renderSingleMessage(message.sender, message.content, message.messageType, message.fileInfo);
         }
     });
     
@@ -631,7 +631,7 @@ function renderChatMessages() {
 }
 
 // 渲染单条消息
-function renderSingleMessage(sender, content) {
+function renderSingleMessage(sender, content, messageType = 'text', fileInfo = null) {
     const chatMessages = document.getElementById('chat-messages');
     
     const messageDiv = document.createElement('div');
@@ -641,24 +641,70 @@ function renderSingleMessage(sender, content) {
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
     
-    // 如果是AI消息，则渲染Markdown格式和数学公式
-    if (sender === 'ai') {
-        // 先渲染Markdown
-        bubble.innerHTML = marked.parse(content);
+    // 根据消息类型渲染不同内容
+    if (messageType === 'image') {
+        // 图片消息
+        const img = document.createElement('img');
+        img.src = content;
+        img.alt = '用户发送的图片';
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '8px';
+        img.style.cursor = 'pointer';
+        img.onclick = () => window.open(content, '_blank');
+        bubble.appendChild(img);
+    } else if (messageType === 'file') {
+        // 文件消息
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'file-message-container';
         
-        // 然后渲染数学公式
-        renderMathInElement(bubble, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\[', right: '\\]', display: true},
-                {left: '\\(', right: '\\)', display: false}
-            ],
-            throwOnError: false
-        });
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'file-icon';
+        fileIcon.innerHTML = '📄';
+        
+        const fileDetails = document.createElement('div');
+        fileDetails.className = 'file-details';
+        
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
+        
+        const fileSize = document.createElement('div');
+        fileSize.className = 'file-size';
+        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
+        
+        fileDetails.appendChild(fileName);
+        fileDetails.appendChild(fileSize);
+        
+        fileContainer.appendChild(fileIcon);
+        fileContainer.appendChild(fileDetails);
+        
+        // 添加点击下载事件
+        fileContainer.onclick = () => {
+            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
+            alert('这是您上传的文件，无法在聊天界面中下载。');
+        };
+        
+        bubble.appendChild(fileContainer);
     } else {
-        // 用户消息保持纯文本
-        bubble.textContent = content;
+        // 文本消息
+        if (sender === 'ai') {
+            // 先渲染Markdown
+            bubble.innerHTML = marked.parse(content);
+            
+            // 然后渲染数学公式
+            renderMathInElement(bubble, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ],
+                throwOnError: false
+            });
+        } else {
+            // 用户消息保持纯文本
+            bubble.textContent = content;
+        }
     }
     
     messageDiv.appendChild(bubble);
@@ -783,7 +829,7 @@ async function callAIForResponse(message) {
                 }
                 
                 // 直接添加到DOM，不保存到聊天历史
-                addMessageToDOM('ai', messages[i].trim());
+                addMessageToDOM('ai', messages[i].trim(), 'text');
             }
         } else {
             // 只有一条消息，正常处理
@@ -926,6 +972,8 @@ function addMessage(sender, content, options = {}) {
         sender: sender,
         content: content,
         timestamp: new Date().toISOString(),
+        messageType: options.messageType || 'text',
+        fileInfo: options.fileInfo || null,
         ...options // 添加额外的选项，如isMultiMessage标记
     });
     
@@ -940,7 +988,7 @@ function addMessage(sender, content, options = {}) {
 }
 
 // 直接添加消息到DOM，不保存到聊天历史
-function addMessageToDOM(sender, content) {
+function addMessageToDOM(sender, content, messageType = 'text', fileInfo = null) {
     const chatMessages = document.getElementById('chat-messages');
     
     const messageDiv = document.createElement('div');
@@ -950,24 +998,70 @@ function addMessageToDOM(sender, content) {
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
     
-    // 如果是AI消息，则渲染Markdown格式和数学公式
-    if (sender === 'ai') {
-        // 先渲染Markdown
-        bubble.innerHTML = marked.parse(content);
+    // 根据消息类型渲染不同内容
+    if (messageType === 'image') {
+        // 图片消息
+        const img = document.createElement('img');
+        img.src = content;
+        img.alt = '用户发送的图片';
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '8px';
+        img.style.cursor = 'pointer';
+        img.onclick = () => window.open(content, '_blank');
+        bubble.appendChild(img);
+    } else if (messageType === 'file') {
+        // 文件消息
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'file-message-container';
         
-        // 然后渲染数学公式
-        renderMathInElement(bubble, {
-            delimiters: [
-                {left: '$$', right: '$$', display: true},
-                {left: '$', right: '$', display: false},
-                {left: '\\[', right: '\\]', display: true},
-                {left: '\\(', right: '\\)', display: false}
-            ],
-            throwOnError: false
-        });
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'file-icon';
+        fileIcon.innerHTML = '📄';
+        
+        const fileDetails = document.createElement('div');
+        fileDetails.className = 'file-details';
+        
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
+        
+        const fileSize = document.createElement('div');
+        fileSize.className = 'file-size';
+        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
+        
+        fileDetails.appendChild(fileName);
+        fileDetails.appendChild(fileSize);
+        
+        fileContainer.appendChild(fileIcon);
+        fileContainer.appendChild(fileDetails);
+        
+        // 添加点击下载事件
+        fileContainer.onclick = () => {
+            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
+            alert('这是您上传的文件，无法在聊天界面中下载。');
+        };
+        
+        bubble.appendChild(fileContainer);
     } else {
-        // 用户消息保持纯文本
-        bubble.textContent = content;
+        // 文本消息
+        if (sender === 'ai') {
+            // 先渲染Markdown
+            bubble.innerHTML = marked.parse(content);
+            
+            // 然后渲染数学公式
+            renderMathInElement(bubble, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ],
+                throwOnError: false
+            });
+        } else {
+            // 用户消息保持纯文本
+            bubble.textContent = content;
+        }
     }
     
     messageDiv.appendChild(bubble);
@@ -993,15 +1087,62 @@ async function callAIAPI(message) {
     
     // 添加最近的聊天历史（根据设置中的上下文数量限制）
     const recentMessages = chatHistory[currentCharacterId].slice(-settings.contextCount);
+    let hasImageInContext = false;
+    let imageDataUrl = null;
+    
     recentMessages.forEach(msg => {
+        // 检查是否有图片消息
+        if (msg.messageType === 'image') {
+            hasImageInContext = true;
+            imageDataUrl = msg.content;
+        }
+        
+        // 根据消息类型处理内容
+        let content = msg.content;
+        if (msg.messageType === 'image') {
+            content = "[用户发送了图片，请分析图片内容]";
+        } else if (msg.messageType === 'file') {
+            content = `[用户发送了文件: ${msg.fileInfo ? msg.fileInfo.name + ' (' + formatFileSize(msg.fileInfo.size) + ')' : '文件'}]`;
+        }
+        
         messages.push({
             role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content
+            content: content
         });
     });
     
-    // 添加当前消息
-    messages.push({ role: 'user', content: message });
+    // 如果有图片，添加图片到消息中
+    if (hasImageInContext && imageDataUrl) {
+        // 查找最后一个用户消息，将图片添加到其中
+        const lastUserMessageIndex = messages.findLastIndex(msg => msg.role === 'user');
+        if (lastUserMessageIndex !== -1) {
+            // 提取base64数据（去掉data:image/...;base64,前缀）
+            const base64Data = imageDataUrl.split(',')[1];
+            const mimeType = imageDataUrl.split(';')[0].split(':')[1];
+            
+            // 修改消息格式以支持图片
+            messages[lastUserMessageIndex] = {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: '[用户发送了图片，请分析图片内容]'
+                    },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: `data:${mimeType};base64,${base64Data}`
+                        }
+                    }
+                ]
+            };
+        }
+    }
+    
+    // 添加当前消息（如果不是图片消息）
+    if (!hasImageInContext) {
+        messages.push({ role: 'user', content: message });
+    }
     
     // 记录API请求
     const requestData = {
@@ -1089,12 +1230,12 @@ async function callAIAPI(message) {
             });
             
             return responseContent;
-        } catch (error) {
+        } catch (caughtError) {
             // 如果是网络错误或其他非HTTP错误
             if (attempt < maxRetries) {
                 const error = {
                     attempt: attempt + 1,
-                    error: error.message,
+                    error: caughtError.message,
                     timestamp: new Date().toISOString()
                 };
                 
@@ -1102,22 +1243,22 @@ async function callAIAPI(message) {
                 
                 logDebugEvent('api_error', {
                     attempt: attempt + 1,
-                    error: error.message,
-                    stack: error.stack
+                    error: caughtError.message,
+                    stack: caughtError.stack
                 });
                 
                 continue; // 继续下一次重试
             }
             
             // 最后一次尝试失败，收集所有错误信息
-            if (error.message.includes('API请求失败，已重试')) {
+            if (caughtError.message.includes('API请求失败，已重试')) {
                 // 已经是包含所有错误信息的错误，直接抛出
-                throw error;
+                throw caughtError;
             } else {
                 // 添加到错误列表
                 errors.push({
                     attempt: attempt + 1,
-                    error: error.message,
+                    error: caughtError.message,
                     timestamp: new Date().toISOString()
                 });
                 
@@ -1839,4 +1980,259 @@ function clearCurrentCharacterChat() {
     closeEditCharacterModal();
     
     alert('聊天记录已清空');
+}
+
+// 聊天菜单相关功能
+// 切换聊天菜单显示/隐藏
+function toggleChatMenu() {
+    const chatMenu = document.getElementById('chat-menu');
+    chatMenu.classList.toggle('show');
+    
+    // 如果菜单显示，添加点击外部关闭菜单的事件
+    if (chatMenu.classList.contains('show')) {
+        setTimeout(() => {
+            document.addEventListener('click', closeChatMenuOnClickOutside);
+        }, 100);
+    } else {
+        document.removeEventListener('click', closeChatMenuOnClickOutside);
+    }
+}
+
+// 点击外部关闭菜单
+function closeChatMenuOnClickOutside(event) {
+    const chatMenu = document.getElementById('chat-menu');
+    const plusBtn = document.getElementById('plus-btn');
+    
+    // 如果点击的不是菜单和加号按钮，则关闭菜单
+    if (!chatMenu.contains(event.target) && event.target !== plusBtn) {
+        chatMenu.classList.remove('show');
+        document.removeEventListener('click', closeChatMenuOnClickOutside);
+    }
+}
+
+// 发送图片
+async function sendImage() {
+    // 隐藏菜单
+    document.getElementById('chat-menu').classList.remove('show');
+    
+    // 创建文件输入元素
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            // 检查文件大小
+            if (file.size > 20 * 1024 * 1024) {
+                alert('图片大小不能超过20MB');
+                return;
+            }
+            
+            // 读取文件并添加到聊天记录
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                const imageUrl = event.target.result;
+                
+                // 添加用户消息，指定消息类型为'image'
+                addMessage('user', imageUrl, {
+                    messageType: 'image',
+                    fileInfo: {
+                        name: file.name,
+                        size: file.size
+                    }
+                });
+                
+                // 调用AI处理图片
+                if (settings.enableDelaySend) {
+                    // 添加消息到待发送列表
+                    pendingMessages.push('[用户发送了图片，请分析图片内容]');
+                    
+                    // 重置计时器
+                    if (messageDelayTimer) {
+                        clearTimeout(messageDelayTimer);
+                    }
+                    
+                    // 设置新的计时器
+                    messageDelayTimer = setTimeout(() => {
+                        sendPendingMessages();
+                    }, settings.replyDelay * 1000);
+                } else {
+                    // 如果未启用延迟发送，直接发送消息
+                    await callAIForResponse('[用户发送了图片，请分析图片内容]');
+                }
+            };
+            
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    input.click();
+}
+
+// 发送文件
+function sendFile() {
+    // 隐藏菜单
+    document.getElementById('chat-menu').classList.remove('show');
+    
+    // 创建文件输入元素
+    const input = document.createElement('input');
+    input.type = 'file';
+    
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            // 检查文件大小
+            if (file.size > 10 * 1024 * 1024) {
+                alert('文件大小不能超过10MB');
+                return;
+            }
+            
+            // 添加用户消息，指定消息类型为'file'
+            addMessage('user', file.name, {
+                messageType: 'file',
+                fileInfo: {
+                    name: file.name,
+                    size: file.size
+                }
+            });
+            
+            // 添加AI回复
+            addMessage('ai', "我收到了你发送的文件，但目前我还无法直接处理文件内容。");
+        }
+    };
+    
+    input.click();
+}
+
+// 开始语音录制
+function startVoiceRecord() {
+    // 隐藏菜单
+    document.getElementById('chat-menu').classList.remove('show');
+    
+    // 检查浏览器是否支持语音识别
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert('你的浏览器不支持语音识别功能');
+        return;
+    }
+    
+    // 创建语音识别实例
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.lang = 'zh-CN';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    // 开始识别
+    recognition.onstart = function() {
+        // 显示正在录音的提示
+        const recordingMessage = {
+            type: 'system',
+            content: '正在录音...',
+            timestamp: new Date().toISOString()
+        };
+        
+        if (!chatHistory[currentCharacterId]) {
+            chatHistory[currentCharacterId] = [];
+        }
+        
+        chatHistory[currentCharacterId].push(recordingMessage);
+        saveChatHistory();
+        renderMessage(recordingMessage);
+        scrollToBottom();
+    };
+    
+    // 识别结果
+    recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        
+        // 移除录音提示消息
+        chatHistory[currentCharacterId].pop();
+        
+        // 填充到输入框
+        document.getElementById('chat-input').value = transcript;
+        
+        // 重新渲染聊天记录
+        renderChatMessages();
+        scrollToBottom();
+    };
+    
+    // 识别错误
+    recognition.onerror = function(event) {
+        // 移除录音提示消息
+        chatHistory[currentCharacterId].pop();
+        
+        // 显示错误消息
+        const errorMessage = {
+            type: 'system',
+            content: `语音识别失败: ${event.error}`,
+            timestamp: new Date().toISOString()
+        };
+        
+        chatHistory[currentCharacterId].push(errorMessage);
+        saveChatHistory();
+        renderChatMessages();
+        scrollToBottom();
+    };
+    
+    // 识别结束
+    recognition.onend = function() {
+        // 移除录音提示消息（如果还存在）
+        const lastMessage = chatHistory[currentCharacterId][chatHistory[currentCharacterId].length - 1];
+        if (lastMessage && lastMessage.content === '正在录音...') {
+            chatHistory[currentCharacterId].pop();
+            renderChatMessages();
+        }
+    };
+    
+    // 开始识别
+    recognition.start();
+}
+
+// 清空当前聊天
+function clearCurrentChat() {
+    // 隐藏菜单
+    document.getElementById('chat-menu').classList.remove('show');
+    
+    // 确认操作
+    if (!confirm('确定要清空当前对话吗？此操作不可撤销。')) {
+        return;
+    }
+    
+    // 清空当前角色的聊天记录
+    if (chatHistory[currentCharacterId]) {
+        delete chatHistory[currentCharacterId];
+        saveChatHistory();
+    }
+    
+    // 清空聊天界面
+    document.getElementById('chat-messages').innerHTML = '';
+    
+    // 显示提示消息
+    const clearMessage = {
+        type: 'system',
+        content: '对话已清空',
+        timestamp: new Date().toISOString()
+    };
+    
+    if (!chatHistory[currentCharacterId]) {
+        chatHistory[currentCharacterId] = [];
+    }
+    
+    chatHistory[currentCharacterId].push(clearMessage);
+    saveChatHistory();
+    renderMessage(clearMessage);
+    scrollToBottom();
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

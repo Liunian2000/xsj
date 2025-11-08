@@ -719,6 +719,131 @@ input:checked + .slider:before {
   transform: scale(0.98);
 }
 
+/* 加号按钮样式 */
+#plus-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f0f2f5;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 24px;
+  font-weight: 300;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#plus-btn:hover {
+  background-color: #e0e0e0;
+  color: var(--accent-color);
+  transform: rotate(90deg);
+}
+
+#plus-btn:active {
+  transform: rotate(90deg) scale(0.95);
+}
+
+/* 聊天菜单样式 */
+.chat-menu {
+  position: absolute;
+  bottom: 60px;
+  right: 15px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px 0;
+  min-width: 180px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.chat-menu.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.chat-menu::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  right: 20px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid white;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.menu-item:active {
+  background-color: #eeeeee;
+}
+
+.menu-icon {
+  font-size: 20px;
+  margin-right: 12px;
+  width: 24px;
+  text-align: center;
+}
+
+.menu-text {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+/* 文件消息样式 */
+.file-message-container {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-message-container:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.file-icon {
+    font-size: 24px;
+    margin-right: 12px;
+}
+
+.file-details {
+    flex: 1;
+}
+
+.file-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+    word-break: break-all;
+}
+
+.file-size {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
     #phone-screen {
