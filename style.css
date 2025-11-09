@@ -206,6 +206,21 @@ body {
   padding: 0 8px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#delete-selected-btn {
+  display: none;
+}
+
+.header .action-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* 主屏幕 */
 #home-screen {
   display: flex;
@@ -623,6 +638,7 @@ input:checked + .slider:before {
 .message {
   display: flex;
   max-width: 80%;
+  position: relative;
 }
 
 .message.user {
@@ -631,6 +647,55 @@ input:checked + .slider:before {
 
 .message.ai {
   align-self: flex-start;
+}
+
+.message-select-indicator {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-color);
+  background-color: white;
+  color: transparent;
+  font-size: 14px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+#chat-screen.selection-mode .message.ai {
+  margin-left: 28px;
+}
+
+#chat-screen.selection-mode .message.user {
+  margin-right: 28px;
+}
+
+#chat-screen.selection-mode .message .message-select-indicator {
+  display: flex;
+}
+
+#chat-screen.selection-mode .message.ai .message-select-indicator {
+  left: -28px;
+}
+
+#chat-screen.selection-mode .message.user .message-select-indicator {
+  right: -28px;
+}
+
+.message.selected .message-bubble {
+  outline: 2px solid var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15);
+}
+
+.message.selected .message-select-indicator {
+  background-color: var(--accent-color);
+  color: white;
 }
 
 .message-bubble {
