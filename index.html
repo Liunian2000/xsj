@@ -67,7 +67,11 @@
             <div class="header">
                 <span class="back-btn" onclick="showScreen('character-list-screen')">‹</span>
                 <span id="chat-character-name">角色名称</span>
-                <span class="action-btn" onclick="showEditCharacterModal()">编辑</span>
+                <div class="header-actions">
+                    <span class="action-btn" id="selection-toggle-btn" onclick="toggleSelectionMode()">选择</span>
+                    <span class="action-btn" id="delete-selected-btn" onclick="deleteSelectedMessages()">删除</span>
+                    <span class="action-btn" onclick="showEditCharacterModal()">编辑</span>
+                </div>
             </div>
             <div id="chat-messages" class="chat-messages">
                 <!-- 聊天消息将在这里动态生成 -->

@@ -5,6 +5,10 @@ let chatHistory = {};
 let messageDelayTimer = null;
 let pendingMessages = [];
 let debugLog = []; // 存储调试日志
+let isSelectionMode = false;
+let selectedMessageKeys = new Set();
+let longPressTimer = null;
+const LONG_PRESS_DURATION = 600;
 let settings = {
     apiUrl: 'https://api.siliconflow.cn/v1/chat/completions',
     apiKey: '',
@@ -595,12 +599,13 @@ function openChat(characterId) {
     currentCharacterId = characterId;
     const character = characters.find(c => c.id === characterId);
     document.getElementById('chat-character-name').textContent = character.name;
-    
+
     // 初始化聊天记录（如果不存在）
     if (!chatHistory[characterId]) {
         chatHistory[characterId] = [];
     }
-    
+
+    cancelSelectionMode(true);
     renderChatMessages();
     showScreen('chat-screen');
 }
@@ -608,90 +613,144 @@ function openChat(characterId) {
 // 渲染聊天消息
 function renderChatMessages() {
     const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+
     chatMessages.innerHTML = '';
-    
+
     const messages = chatHistory[currentCharacterId] || [];
-    
+    let historyUpdated = false;
+
     messages.forEach(message => {
-        // 如果是多消息，分割并逐条渲染
+        if (!message.id) {
+            message.id = generateMessageId();
+            historyUpdated = true;
+        }
+
+        if (message.type === 'system') {
+            renderSystemMessage(message);
+            return;
+        }
+
         if (message.isMultiMessage) {
-            const splitMessages = splitMultiMessages(message.content);
-            splitMessages.forEach((msg, index) => {
-                // 渲染每条分割后的消息
-                renderSingleMessage(message.sender, msg.trim(), message.messageType, message.fileInfo);
+            const parts = splitMultiMessages(message.content);
+            parts.forEach((msg, index) => {
+                renderSingleMessage(message, {
+                    displayContent: msg.trim(),
+                    partIndex: index
+                });
             });
         } else {
-            // 普通消息，直接渲染
-            renderSingleMessage(message.sender, message.content, message.messageType, message.fileInfo);
+            renderSingleMessage(message);
         }
     });
-    
-    // 滚动到底部
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    if (!isSelectionMode) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    if (historyUpdated) {
+        saveChatHistory();
+    }
+
+    updateSelectionUI();
 }
 
-// 渲染单条消息
-function renderSingleMessage(sender, content, messageType = 'text', fileInfo = null) {
+function renderSystemMessage(message) {
     const chatMessages = document.getElementById('chat-messages');
-    
+    if (!chatMessages) return;
+
+    const systemDiv = document.createElement('div');
+    systemDiv.className = 'system-message';
+    systemDiv.textContent = message.content || '';
+    chatMessages.appendChild(systemDiv);
+}
+
+function renderSingleMessage(message, options = {}) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages || !message) return;
+
+    if (!message.id) {
+        message.id = generateMessageId();
+    }
+
+    const displayContent = options.displayContent !== undefined ? options.displayContent : message.content;
+    const partIndex = typeof options.partIndex === 'number' && !Number.isNaN(options.partIndex)
+        ? options.partIndex
+        : null;
+    const messageType = options.messageType || message.messageType || 'text';
+    const sender = message.sender || (messageType === 'system' ? 'system' : 'ai');
+
+    if (sender === 'system') {
+        renderSystemMessage({ content: displayContent });
+        return;
+    }
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
-    
-    // 普通消息处理
+    messageDiv.dataset.messageId = message.id;
+    if (partIndex !== null) {
+        messageDiv.dataset.partIndex = String(partIndex);
+    } else {
+        delete messageDiv.dataset.partIndex;
+    }
+
+    const messageKey = getMessageKey(message.id, partIndex);
+    messageDiv.dataset.messageKey = messageKey;
+
+    if (selectedMessageKeys.has(messageKey)) {
+        messageDiv.classList.add('selected');
+    }
+
+    const selectIndicator = document.createElement('div');
+    selectIndicator.className = 'message-select-indicator';
+    selectIndicator.textContent = '✓';
+    messageDiv.appendChild(selectIndicator);
+
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    
-    // 根据消息类型渲染不同内容
+
     if (messageType === 'image') {
-        // 图片消息
         const img = document.createElement('img');
-        img.src = content;
+        img.src = displayContent;
         img.alt = '用户发送的图片';
         img.style.maxWidth = '100%';
         img.style.borderRadius = '8px';
         img.style.cursor = 'pointer';
-        img.onclick = () => window.open(content, '_blank');
+        img.onclick = () => window.open(displayContent, '_blank');
         bubble.appendChild(img);
     } else if (messageType === 'file') {
-        // 文件消息
         const fileContainer = document.createElement('div');
         fileContainer.className = 'file-message-container';
-        
+
         const fileIcon = document.createElement('div');
         fileIcon.className = 'file-icon';
         fileIcon.innerHTML = '📄';
-        
+
         const fileDetails = document.createElement('div');
         fileDetails.className = 'file-details';
-        
+
         const fileName = document.createElement('div');
         fileName.className = 'file-name';
-        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
-        
+        fileName.textContent = message.fileInfo ? message.fileInfo.name : '未知文件';
+
         const fileSize = document.createElement('div');
         fileSize.className = 'file-size';
-        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
-        
+        fileSize.textContent = message.fileInfo ? formatFileSize(message.fileInfo.size) : '未知大小';
+
         fileDetails.appendChild(fileName);
         fileDetails.appendChild(fileSize);
-        
+
         fileContainer.appendChild(fileIcon);
         fileContainer.appendChild(fileDetails);
-        
-        // 添加点击下载事件
+
         fileContainer.onclick = () => {
-            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
             alert('这是您上传的文件，无法在聊天界面中下载。');
         };
-        
+
         bubble.appendChild(fileContainer);
     } else {
-        // 文本消息
         if (sender === 'ai') {
-            // 先渲染Markdown
-            bubble.innerHTML = marked.parse(content);
-            
-            // 然后渲染数学公式
+            bubble.innerHTML = marked.parse(displayContent);
             renderMathInElement(bubble, {
                 delimiters: [
                     {left: '$$', right: '$$', display: true},
@@ -702,14 +761,416 @@ function renderSingleMessage(sender, content, messageType = 'text', fileInfo = n
                 throwOnError: false
             });
         } else {
-            // 用户消息保持纯文本
-            bubble.textContent = content;
+            bubble.textContent = displayContent;
         }
     }
-    
+
     messageDiv.appendChild(bubble);
-    
+
+    messageDiv.addEventListener('click', event => {
+        if (!isSelectionMode) {
+            return;
+        }
+
+        if (event.target.closest('a')) {
+            return;
+        }
+
+        event.preventDefault();
+        toggleMessageSelection(messageKey, messageDiv);
+    });
+
+    const startPressHandler = event => handleMessagePressStart(event, messageDiv);
+    messageDiv.addEventListener('touchstart', startPressHandler);
+    messageDiv.addEventListener('touchend', handleMessagePressEnd);
+    messageDiv.addEventListener('touchmove', handleMessagePressCancel);
+    messageDiv.addEventListener('mousedown', event => handleMessagePressStart(event, messageDiv));
+    messageDiv.addEventListener('mouseup', handleMessagePressEnd);
+    messageDiv.addEventListener('mouseleave', handleMessagePressCancel);
+    messageDiv.addEventListener('contextmenu', event => {
+        event.preventDefault();
+        if (!isSelectionMode) {
+            showMessageOptions(messageDiv);
+        }
+    });
+
     chatMessages.appendChild(messageDiv);
+}
+
+function generateMessageId() {
+    return 'msg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function getMessageKey(messageId, partIndex = null) {
+    return partIndex !== null && partIndex !== undefined ? `${messageId}|${partIndex}` : messageId;
+}
+
+function parseMessageKey(key) {
+    if (!key) {
+        return { messageId: null, partIndex: null };
+    }
+
+    const [messageId, index] = key.split('|');
+    return {
+        messageId,
+        partIndex: index !== undefined ? parseInt(index, 10) : null
+    };
+}
+
+function toggleMessageSelection(key, element) {
+    if (!isSelectionMode || !key) {
+        return;
+    }
+
+    if (selectedMessageKeys.has(key)) {
+        selectedMessageKeys.delete(key);
+        if (element) {
+            element.classList.remove('selected');
+        }
+    } else {
+        selectedMessageKeys.add(key);
+        if (element) {
+            element.classList.add('selected');
+        }
+    }
+
+    updateSelectionUI();
+}
+
+function updateSelectionUI() {
+    const toggleBtn = document.getElementById('selection-toggle-btn');
+    const deleteBtn = document.getElementById('delete-selected-btn');
+
+    if (toggleBtn) {
+        toggleBtn.textContent = isSelectionMode ? '完成' : '选择';
+    }
+
+    if (deleteBtn) {
+        if (isSelectionMode) {
+            deleteBtn.style.display = 'flex';
+            if (selectedMessageKeys.size > 0) {
+                deleteBtn.textContent = `删除(${selectedMessageKeys.size})`;
+                deleteBtn.classList.remove('disabled');
+            } else {
+                deleteBtn.textContent = '删除';
+                deleteBtn.classList.add('disabled');
+            }
+        } else {
+            deleteBtn.style.display = 'none';
+            deleteBtn.classList.remove('disabled');
+        }
+    }
+
+    const chatScreen = document.getElementById('chat-screen');
+    if (chatScreen) {
+        chatScreen.classList.toggle('selection-mode', isSelectionMode);
+    }
+}
+
+function handleMessagePressStart(event, element) {
+    if (isSelectionMode) {
+        return;
+    }
+
+    if (event.type === 'mousedown' && event.button !== 0) {
+        return;
+    }
+
+    clearLongPressTimer();
+    longPressTimer = setTimeout(() => {
+        showMessageOptions(element);
+    }, LONG_PRESS_DURATION);
+}
+
+function handleMessagePressEnd() {
+    clearLongPressTimer();
+}
+
+function handleMessagePressCancel() {
+    clearLongPressTimer();
+}
+
+function clearLongPressTimer() {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+}
+
+function showMessageOptions(messageElement) {
+    clearLongPressTimer();
+
+    if (!messageElement) {
+        return;
+    }
+
+    const messageId = messageElement.dataset.messageId;
+    if (!messageId) {
+        return;
+    }
+
+    const partIndexValue = messageElement.dataset.partIndex;
+    const partIndex = partIndexValue !== undefined ? parseInt(partIndexValue, 10) : null;
+    const message = getMessageById(messageId);
+
+    if (!message || message.type === 'system') {
+        return;
+    }
+
+    const choice = prompt('请选择操作：\n1. 编辑\n2. 删除\n3. 多选', '1');
+    if (choice === null) {
+        return;
+    }
+
+    if (choice === '1') {
+        editMessage(messageId, partIndex);
+    } else if (choice === '2') {
+        deleteMessage(messageId, partIndex);
+    } else if (choice === '3') {
+        const key = getMessageKey(messageId, Number.isNaN(partIndex) ? null : partIndex);
+        enterSelectionModeWithMessage(key);
+    }
+}
+
+function getMessageById(messageId) {
+    const messages = chatHistory[currentCharacterId] || [];
+    return messages.find(msg => msg.id === messageId);
+}
+
+function editMessage(messageId, partIndex = null) {
+    const message = getMessageById(messageId);
+    if (!message) {
+        return;
+    }
+
+    if (message.messageType && message.messageType !== 'text') {
+        alert('当前消息类型不支持编辑');
+        return;
+    }
+
+    let currentContent = message.content;
+
+    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
+        const parts = splitMultiMessages(message.content);
+        if (partIndex >= parts.length) {
+            return;
+        }
+        currentContent = parts[partIndex];
+    }
+
+    const newContent = prompt('编辑消息内容', currentContent);
+    if (newContent === null) {
+        return;
+    }
+
+    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
+        const parts = splitMultiMessages(message.content);
+        if (partIndex >= parts.length) {
+            return;
+        }
+
+        if (!newContent.trim()) {
+            if (!confirm('内容为空，将删除该条消息，是否继续？')) {
+                return;
+            }
+
+            if (removeMessage(messageId, partIndex)) {
+                saveChatHistory();
+            }
+        } else {
+            parts[partIndex] = newContent;
+            message.content = parts.join(settings.multiMessageSeparator || '@@@@');
+            saveChatHistory();
+        }
+    } else {
+        if (!newContent.trim()) {
+            if (!confirm('内容为空，将删除该条消息，是否继续？')) {
+                return;
+            }
+
+            if (removeMessage(messageId)) {
+                saveChatHistory();
+            }
+        } else {
+            message.content = newContent;
+            saveChatHistory();
+        }
+    }
+
+    renderChatMessages();
+}
+
+function removeMessage(messageId, partIndex = null) {
+    const messages = chatHistory[currentCharacterId];
+    if (!messages) {
+        return false;
+    }
+
+    const index = messages.findIndex(msg => msg.id === messageId);
+    if (index === -1) {
+        return false;
+    }
+
+    const message = messages[index];
+
+    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
+        const parts = splitMultiMessages(message.content);
+        if (partIndex < 0 || partIndex >= parts.length) {
+            return false;
+        }
+
+        parts.splice(partIndex, 1);
+
+        if (parts.length === 0) {
+            messages.splice(index, 1);
+            clearSelectionForMessage(messageId);
+        } else {
+            message.content = parts.join(settings.multiMessageSeparator || '@@@@');
+            adjustSelectionKeysAfterPartDeletion(messageId, partIndex);
+        }
+    } else {
+        messages.splice(index, 1);
+        clearSelectionForMessage(messageId);
+    }
+
+    return true;
+}
+
+function deleteMessage(messageId, partIndex = null) {
+    if (!confirm('确定删除这条消息吗？')) {
+        return;
+    }
+
+    if (removeMessage(messageId, partIndex)) {
+        saveChatHistory();
+        renderChatMessages();
+    }
+}
+
+function deleteSelectedMessages() {
+    if (!isSelectionMode || selectedMessageKeys.size === 0) {
+        return;
+    }
+
+    if (!confirm('确定要删除选中的消息吗？')) {
+        return;
+    }
+
+    const grouped = new Map();
+    selectedMessageKeys.forEach(key => {
+        const { messageId, partIndex } = parseMessageKey(key);
+        if (!messageId) {
+            return;
+        }
+        if (!grouped.has(messageId)) {
+            grouped.set(messageId, []);
+        }
+        grouped.get(messageId).push(partIndex);
+    });
+
+    let changed = false;
+
+    grouped.forEach((indexes, messageId) => {
+        if (indexes.some(index => index === null)) {
+            if (removeMessage(messageId)) {
+                changed = true;
+            }
+            return;
+        }
+
+        indexes
+            .filter(index => index !== null)
+            .sort((a, b) => b - a)
+            .forEach(index => {
+                if (removeMessage(messageId, index)) {
+                    changed = true;
+                }
+            });
+    });
+
+    selectedMessageKeys.clear();
+
+    if (changed) {
+        saveChatHistory();
+        renderChatMessages();
+    } else {
+        updateSelectionUI();
+    }
+}
+
+function clearSelectionForMessage(messageId) {
+    const toRemove = [];
+    selectedMessageKeys.forEach(key => {
+        if (key === messageId || key.startsWith(`${messageId}|`)) {
+            toRemove.push(key);
+        }
+    });
+
+    toRemove.forEach(key => selectedMessageKeys.delete(key));
+}
+
+function adjustSelectionKeysAfterPartDeletion(messageId, removedIndex) {
+    const updated = new Set();
+    selectedMessageKeys.forEach(key => {
+        if (key.startsWith(`${messageId}|`)) {
+            const [, indexStr] = key.split('|');
+            const index = parseInt(indexStr, 10);
+
+            if (Number.isNaN(index) || index === removedIndex) {
+                return;
+            }
+
+            if (index > removedIndex) {
+                updated.add(`${messageId}|${index - 1}`);
+            } else {
+                updated.add(key);
+            }
+        } else {
+            updated.add(key);
+        }
+    });
+
+    selectedMessageKeys = updated;
+    updateSelectionUI();
+}
+
+function toggleSelectionMode() {
+    if (isSelectionMode) {
+        cancelSelectionMode();
+    } else {
+        isSelectionMode = true;
+        selectedMessageKeys.clear();
+        updateSelectionUI();
+        renderChatMessages();
+    }
+}
+
+function cancelSelectionMode(skipRender = false) {
+    const wasSelectionMode = isSelectionMode;
+    isSelectionMode = false;
+    selectedMessageKeys.clear();
+    updateSelectionUI();
+
+    if (wasSelectionMode && !skipRender) {
+        renderChatMessages();
+    }
+}
+
+function enterSelectionModeWithMessage(key) {
+    if (!key) {
+        return;
+    }
+
+    if (!isSelectionMode) {
+        isSelectionMode = true;
+        selectedMessageKeys.clear();
+        selectedMessageKeys.add(key);
+        updateSelectionUI();
+        renderChatMessages();
+    } else {
+        const element = document.querySelector(`[data-message-key="${key}"]`);
+        toggleMessageSelection(key, element);
+    }
 }
 
 // 发送消息
@@ -818,18 +1279,14 @@ async function callAIForResponse(message) {
         
         // 如果有多条消息，将它们作为一个整体保存，但标记为多消息
         if (messages.length > 1) {
-            // 保存原始响应内容，但标记为多消息
-            addMessage('ai', response, { isMultiMessage: true });
-            
-            // 逐条显示消息
+            const savedMessage = addMessage('ai', response, { isMultiMessage: true });
+
             for (let i = 0; i < messages.length; i++) {
-                // 如果不是第一条消息，添加延迟
                 if (i > 0) {
                     await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5秒延迟
                 }
-                
-                // 直接添加到DOM，不保存到聊天历史
-                addMessageToDOM('ai', messages[i].trim(), 'text');
+
+                addMessageToDOM(savedMessage, messages[i].trim(), i);
             }
         } else {
             // 只有一条消息，正常处理
@@ -967,109 +1424,47 @@ function addMessage(sender, content, options = {}) {
     if (!chatHistory[currentCharacterId]) {
         chatHistory[currentCharacterId] = [];
     }
-    
-    chatHistory[currentCharacterId].push({
+
+    const message = {
         sender: sender,
         content: content,
         timestamp: new Date().toISOString(),
         messageType: options.messageType || 'text',
         fileInfo: options.fileInfo || null,
-        ...options // 添加额外的选项，如isMultiMessage标记
-    });
-    
-    saveChatHistory();
-    
-    // 如果是多消息，不立即渲染，因为会通过addMessageToDOM逐条添加
-    if (options.isMultiMessage) {
-        return;
+        ...options
+    };
+
+    if (!message.id) {
+        message.id = generateMessageId();
     }
-    
+
+    chatHistory[currentCharacterId].push(message);
+
+    saveChatHistory();
+
+    if (message.isMultiMessage) {
+        return message;
+    }
+
     renderChatMessages();
+    return message;
 }
 
-// 直接添加消息到DOM，不保存到聊天历史
-function addMessageToDOM(sender, content, messageType = 'text', fileInfo = null) {
-    const chatMessages = document.getElementById('chat-messages');
-    
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
-    
-    // 普通消息处理
-    const bubble = document.createElement('div');
-    bubble.className = 'message-bubble';
-    
-    // 根据消息类型渲染不同内容
-    if (messageType === 'image') {
-        // 图片消息
-        const img = document.createElement('img');
-        img.src = content;
-        img.alt = '用户发送的图片';
-        img.style.maxWidth = '100%';
-        img.style.borderRadius = '8px';
-        img.style.cursor = 'pointer';
-        img.onclick = () => window.open(content, '_blank');
-        bubble.appendChild(img);
-    } else if (messageType === 'file') {
-        // 文件消息
-        const fileContainer = document.createElement('div');
-        fileContainer.className = 'file-message-container';
-        
-        const fileIcon = document.createElement('div');
-        fileIcon.className = 'file-icon';
-        fileIcon.innerHTML = '📄';
-        
-        const fileDetails = document.createElement('div');
-        fileDetails.className = 'file-details';
-        
-        const fileName = document.createElement('div');
-        fileName.className = 'file-name';
-        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
-        
-        const fileSize = document.createElement('div');
-        fileSize.className = 'file-size';
-        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
-        
-        fileDetails.appendChild(fileName);
-        fileDetails.appendChild(fileSize);
-        
-        fileContainer.appendChild(fileIcon);
-        fileContainer.appendChild(fileDetails);
-        
-        // 添加点击下载事件
-        fileContainer.onclick = () => {
-            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
-            alert('这是您上传的文件，无法在聊天界面中下载。');
-        };
-        
-        bubble.appendChild(fileContainer);
-    } else {
-        // 文本消息
-        if (sender === 'ai') {
-            // 先渲染Markdown
-            bubble.innerHTML = marked.parse(content);
-            
-            // 然后渲染数学公式
-            renderMathInElement(bubble, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\[', right: '\\]', display: true},
-                    {left: '\\(', right: '\\)', display: false}
-                ],
-                throwOnError: false
-            });
-        } else {
-            // 用户消息保持纯文本
-            bubble.textContent = content;
-        }
+function addMessageToDOM(message, displayContent, partIndex = null) {
+    if (!message) {
+        return;
     }
-    
-    messageDiv.appendChild(bubble);
-    
-    chatMessages.appendChild(messageDiv);
-    
-    // 滚动到底部
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    renderSingleMessage(message, {
+        displayContent: displayContent,
+        partIndex: typeof partIndex === 'number' ? partIndex : null,
+        messageType: message.messageType || 'text'
+    });
+
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
 }
 
 // 调用AI API
