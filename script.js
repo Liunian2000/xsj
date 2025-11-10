@@ -5,10 +5,8 @@ let chatHistory = {};
 let messageDelayTimer = null;
 let pendingMessages = [];
 let debugLog = []; // 存储调试日志
-let isSelectionMode = false;
-let selectedMessageKeys = new Set();
-let longPressTimer = null;
-const LONG_PRESS_DURATION = 600;
+let isMultiSelectMode = false; // 多选模式状态
+let selectedMessages = new Set(); // 选中的消息索引
 let settings = {
     apiUrl: 'https://api.siliconflow.cn/v1/chat/completions',
     apiKey: '',
@@ -599,13 +597,12 @@ function openChat(characterId) {
     currentCharacterId = characterId;
     const character = characters.find(c => c.id === characterId);
     document.getElementById('chat-character-name').textContent = character.name;
-
+    
     // 初始化聊天记录（如果不存在）
     if (!chatHistory[characterId]) {
         chatHistory[characterId] = [];
     }
-
-    cancelSelectionMode(true);
+    
     renderChatMessages();
     showScreen('chat-screen');
 }
@@ -613,564 +610,624 @@ function openChat(characterId) {
 // 渲染聊天消息
 function renderChatMessages() {
     const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
-
     chatMessages.innerHTML = '';
-
+    
     const messages = chatHistory[currentCharacterId] || [];
-    let historyUpdated = false;
-
-    messages.forEach(message => {
-        if (!message.id) {
-            message.id = generateMessageId();
-            historyUpdated = true;
-        }
-
-        if (message.type === 'system') {
-            renderSystemMessage(message);
-            return;
-        }
-
+    
+    messages.forEach((message, index) => {
+        // 如果是多消息，直接渲染原始内容，不再分割
         if (message.isMultiMessage) {
-            const parts = splitMultiMessages(message.content);
-            parts.forEach((msg, index) => {
-                renderSingleMessage(message, {
-                    displayContent: msg.trim(),
-                    partIndex: index
-                });
-            });
+            // 直接渲染原始响应内容，不进行分割
+            renderSingleMessage(message.sender, message.content, message.messageType || 'text', message.fileInfo, index);
         } else {
-            renderSingleMessage(message);
+            // 普通消息，直接渲染
+            renderSingleMessage(message.sender, message.content, message.messageType || 'text', message.fileInfo, index);
         }
     });
-
-    if (!isSelectionMode) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    if (historyUpdated) {
-        saveChatHistory();
-    }
-
-    updateSelectionUI();
+    
+    // 滚动到底部
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-function renderSystemMessage(message) {
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages) return;
-
-    const systemDiv = document.createElement('div');
-    systemDiv.className = 'system-message';
-    systemDiv.textContent = message.content || '';
-    chatMessages.appendChild(systemDiv);
+// 切换多选模式
+function toggleMultiSelectMode() {
+    isMultiSelectMode = !isMultiSelectMode;
+    
+    if (isMultiSelectMode) {
+        // 进入多选模式
+        selectedMessages.clear();
+        
+        // 显示多选工具栏
+        showMultiSelectToolbar();
+        
+        // 更新所有消息的样式
+        updateMessagesForMultiSelect();
+    } else {
+        // 退出多选模式
+        selectedMessages.clear();
+        
+        // 隐藏多选工具栏
+        hideMultiSelectToolbar();
+        
+        // 更新所有消息的样式
+        updateMessagesForMultiSelect();
+    }
 }
 
-function renderSingleMessage(message, options = {}) {
-    const chatMessages = document.getElementById('chat-messages');
-    if (!chatMessages || !message) return;
-
-    if (!message.id) {
-        message.id = generateMessageId();
+// 显示多选工具栏
+function showMultiSelectToolbar() {
+    // 移除已存在的工具栏
+    const existingToolbar = document.getElementById('multi-select-toolbar');
+    if (existingToolbar) {
+        existingToolbar.remove();
     }
+    
+    // 创建工具栏
+    const toolbar = document.createElement('div');
+    toolbar.id = 'multi-select-toolbar';
+    toolbar.className = 'multi-select-toolbar';
+    toolbar.innerHTML = `
+        <div class="toolbar-left">
+            <span class="selected-count">已选择 0 条消息</span>
+        </div>
+        <div class="toolbar-right">
+            <button class="toolbar-btn select-all-btn" onclick="selectAllMessages()">全选</button>
+            <button class="toolbar-btn delete-selected-btn" onclick="deleteSelectedMessages()">删除</button>
+            <button class="toolbar-btn cancel-btn" onclick="toggleMultiSelectMode()">取消</button>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.getElementById('chat-screen').appendChild(toolbar);
+}
 
-    const displayContent = options.displayContent !== undefined ? options.displayContent : message.content;
-    const partIndex = typeof options.partIndex === 'number' && !Number.isNaN(options.partIndex)
-        ? options.partIndex
-        : null;
-    const messageType = options.messageType || message.messageType || 'text';
-    const sender = message.sender || (messageType === 'system' ? 'system' : 'ai');
+// 隐藏多选工具栏
+function hideMultiSelectToolbar() {
+    const toolbar = document.getElementById('multi-select-toolbar');
+    if (toolbar) {
+        toolbar.remove();
+    }
+}
 
-    if (sender === 'system') {
-        renderSystemMessage({ content: displayContent });
+// 更新消息样式以支持多选
+function updateMessagesForMultiSelect() {
+    const messages = document.querySelectorAll('.message');
+    
+    messages.forEach(messageElement => {
+        const messageIndex = messageElement.getAttribute('data-message-index');
+        
+        if (isMultiSelectMode) {
+            // 进入多选模式
+            messageElement.classList.add('multi-select-mode');
+            
+            // 添加选择框
+            if (!messageElement.querySelector('.message-checkbox')) {
+                const checkbox = document.createElement('div');
+                checkbox.className = 'message-checkbox';
+                checkbox.innerHTML = `
+                    <input type="checkbox" id="check-${messageIndex}" ${selectedMessages.has(messageIndex) ? 'checked' : ''}>
+                    <label for="check-${messageIndex}"></label>
+                `;
+                
+                // 添加点击事件
+                checkbox.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleMessageSelection(messageIndex);
+                });
+                
+                messageElement.appendChild(checkbox);
+            } else {
+                // 如果选择框已存在，更新其选中状态
+                const checkboxInput = messageElement.querySelector('.message-checkbox input');
+                if (checkboxInput) {
+                    checkboxInput.checked = selectedMessages.has(messageIndex);
+                }
+            }
+            
+            // 更新消息气泡的高亮状态
+            if (selectedMessages.has(messageIndex)) {
+                messageElement.classList.add('selected');
+            } else {
+                messageElement.classList.remove('selected');
+            }
+            
+            // 添加点击事件
+            messageElement.addEventListener('click', (e) => {
+                if (!e.target.closest('.message-checkbox')) {
+                    toggleMessageSelection(messageIndex);
+                }
+            });
+        } else {
+            // 退出多选模式
+            messageElement.classList.remove('multi-select-mode');
+            messageElement.classList.remove('selected');
+            
+            // 移除选择框
+            const checkbox = messageElement.querySelector('.message-checkbox');
+            if (checkbox) {
+                checkbox.remove();
+            }
+        }
+    });
+}
+
+// 切换消息选择状态
+function toggleMessageSelection(messageIndex) {
+    if (selectedMessages.has(messageIndex)) {
+        selectedMessages.delete(messageIndex);
+    } else {
+        selectedMessages.add(messageIndex);
+    }
+    
+    // 更新消息样式
+    const messageElement = document.querySelector(`[data-message-index="${messageIndex}"]`);
+    if (messageElement) {
+        // 更新消息气泡的高亮状态
+        if (selectedMessages.has(messageIndex)) {
+            messageElement.classList.add('selected');
+        } else {
+            messageElement.classList.remove('selected');
+        }
+        
+        // 更新复选框的选中状态
+        const checkboxInput = messageElement.querySelector('.message-checkbox input');
+        if (checkboxInput) {
+            checkboxInput.checked = selectedMessages.has(messageIndex);
+        }
+    }
+    
+    // 更新选择计数
+    updateSelectedCount();
+}
+
+// 更新选择计数
+function updateSelectedCount() {
+    const countElement = document.querySelector('.selected-count');
+    if (countElement) {
+        countElement.textContent = `已选择 ${selectedMessages.size} 条消息`;
+    }
+    
+    // 更新删除按钮状态
+    const deleteBtn = document.querySelector('.delete-selected-btn');
+    if (deleteBtn) {
+        deleteBtn.disabled = selectedMessages.size === 0;
+    }
+}
+
+// 全选消息
+function selectAllMessages() {
+    const messages = document.querySelectorAll('.message');
+    
+    if (selectedMessages.size === messages.length) {
+        // 如果已全选，则取消全选
+        selectedMessages.clear();
+    } else {
+        // 否则全选
+        messages.forEach(messageElement => {
+            const messageIndex = messageElement.getAttribute('data-message-index');
+            if (messageIndex) {
+                selectedMessages.add(messageIndex);
+            }
+        });
+    }
+    
+    // 更新消息样式
+    updateMessagesForMultiSelect();
+    
+    // 更新选择计数
+    updateSelectedCount();
+}
+
+// 删除选中的消息
+function deleteSelectedMessages() {
+    if (selectedMessages.size === 0) {
         return;
     }
+    
+    if (!confirm(`确定要删除选中的 ${selectedMessages.size} 条消息吗？`)) {
+        return;
+    }
+    
+    // 获取消息数据
+    const messages = chatHistory[currentCharacterId] || [];
+    
+    // 按索引从大到小排序，避免删除时索引变化
+    const sortedIndices = Array.from(selectedMessages).map(index => {
+        const [mainIndex, subIndex] = index.toString().split('-').map(Number);
+        return { mainIndex, subIndex, originalIndex: index };
+    }).sort((a, b) => {
+        if (a.mainIndex !== b.mainIndex) {
+            return b.mainIndex - a.mainIndex;
+        }
+        return (b.subIndex || 0) - (a.subIndex || 0);
+    });
+    
+    // 删除消息
+    sortedIndices.forEach(({ mainIndex, subIndex }) => {
+        if (subIndex !== undefined) {
+            // 多消息中的子消息
+            const parentMessage = messages[mainIndex];
+            if (parentMessage && parentMessage.isMultiMessage) {
+                const splitMessages = splitMultiMessages(parentMessage.content);
+                
+                // 删除指定的子消息
+                splitMessages.splice(subIndex, 1);
+                
+                if (splitMessages.length > 0) {
+                    // 重新组合多消息
+                    const separator = settings.multiMessageSeparator || '@@@@';
+                    parentMessage.content = splitMessages.join(separator);
+                } else {
+                    // 如果没有子消息了，删除整个父消息
+                    messages.splice(mainIndex, 1);
+                }
+            }
+        } else {
+            // 普通消息
+            messages.splice(mainIndex, 1);
+        }
+    });
+    
+    // 保存聊天历史
+    saveChatHistory();
+    
+    // 退出多选模式
+    toggleMultiSelectMode();
+    
+    // 重新渲染聊天消息
+    renderChatMessages();
+}
 
+// 编辑消息
+function editMessage(messageIndex) {
+    // 解析消息索引
+    const [mainIndex, subIndex] = messageIndex.toString().split('-').map(Number);
+    
+    // 获取消息数据
+    const messages = chatHistory[currentCharacterId] || [];
+    let messageData;
+    let isSubMessage = false;
+    
+    if (subIndex !== undefined) {
+        // 多消息中的子消息
+        const parentMessage = messages[mainIndex];
+        if (parentMessage && parentMessage.isMultiMessage) {
+            const splitMessages = splitMultiMessages(parentMessage.content);
+            messageData = {
+                content: splitMessages[subIndex],
+                sender: parentMessage.sender,
+                messageType: parentMessage.messageType,
+                fileInfo: parentMessage.fileInfo
+            };
+            isSubMessage = true;
+        }
+    } else {
+        // 普通消息
+        messageData = messages[mainIndex];
+    }
+    
+    if (!messageData) return;
+    
+    // 只允许编辑文本消息
+    if (messageData.messageType !== 'text') {
+        alert('只支持编辑文本消息');
+        return;
+    }
+    
+    // 创建编辑对话框
+    const editDialog = document.createElement('div');
+    editDialog.className = 'edit-message-dialog';
+    editDialog.innerHTML = `
+        <div class="edit-dialog-content">
+            <div class="edit-dialog-header">
+                <h3>编辑消息</h3>
+                <button class="close-btn" onclick="this.closest('.edit-message-dialog').remove()">×</button>
+            </div>
+            <div class="edit-dialog-body">
+                <textarea id="edit-message-text" class="edit-textarea">${messageData.content}</textarea>
+            </div>
+            <div class="edit-dialog-footer">
+                <button class="cancel-btn" onclick="this.closest('.edit-message-dialog').remove()">取消</button>
+                <button class="save-btn" onclick="saveEditedMessage('${messageIndex}')">保存</button>
+            </div>
+        </div>
+    `;
+    
+    // 添加到页面
+    document.body.appendChild(editDialog);
+    
+    // 聚焦文本框
+    document.getElementById('edit-message-text').focus();
+}
+
+// 保存编辑的消息
+function saveEditedMessage(messageIndex) {
+    const newContent = document.getElementById('edit-message-text').value.trim();
+    if (!newContent) {
+        alert('消息内容不能为空');
+        return;
+    }
+    
+    // 解析消息索引
+    const [mainIndex, subIndex] = messageIndex.toString().split('-').map(Number);
+    
+    // 获取消息数据
+    const messages = chatHistory[currentCharacterId] || [];
+    
+    if (subIndex !== undefined) {
+        // 多消息中的子消息
+        const parentMessage = messages[mainIndex];
+        if (parentMessage && parentMessage.isMultiMessage) {
+            const splitMessages = splitMultiMessages(parentMessage.content);
+            splitMessages[subIndex] = newContent;
+            
+            // 重新组合多消息
+            const separator = settings.multiMessageSeparator || '@@@@';
+            parentMessage.content = splitMessages.join(separator);
+        }
+    } else {
+        // 普通消息
+        messages[mainIndex].content = newContent;
+    }
+    
+    // 保存聊天历史
+    saveChatHistory();
+    
+    // 重新渲染聊天消息
+    renderChatMessages();
+    
+    // 关闭编辑对话框
+    document.querySelector('.edit-message-dialog').remove();
+}
+
+// 删除消息
+function deleteMessage(messageIndex) {
+    if (!confirm('确定要删除这条消息吗？')) {
+        return;
+    }
+    
+    // 解析消息索引
+    const [mainIndex, subIndex] = messageIndex.toString().split('-').map(Number);
+    
+    // 获取消息数据
+    const messages = chatHistory[currentCharacterId] || [];
+    
+    if (subIndex !== undefined) {
+        // 多消息中的子消息
+        const parentMessage = messages[mainIndex];
+        if (parentMessage && parentMessage.isMultiMessage) {
+            const splitMessages = splitMultiMessages(parentMessage.content);
+            
+            // 删除指定的子消息
+            splitMessages.splice(subIndex, 1);
+            
+            if (splitMessages.length > 0) {
+                // 重新组合多消息
+                const separator = settings.multiMessageSeparator || '@@@@';
+                parentMessage.content = splitMessages.join(separator);
+            } else {
+                // 如果没有子消息了，删除整个父消息
+                messages.splice(mainIndex, 1);
+            }
+        }
+    } else {
+        // 普通消息
+        messages.splice(mainIndex, 1);
+    }
+    
+    // 保存聊天历史
+    saveChatHistory();
+    
+    // 重新渲染聊天消息
+    renderChatMessages();
+}
+
+// 显示消息选项菜单
+function showMessageOptions(messageElement, sender, messageIndex) {
+    // 移除已存在的消息选项菜单
+    const existingMenu = document.getElementById('message-options-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    // 创建消息选项菜单
+    const optionsMenu = document.createElement('div');
+    optionsMenu.id = 'message-options-menu';
+    optionsMenu.className = 'message-options-menu';
+    
+    // 创建菜单项
+    const editItem = document.createElement('div');
+    editItem.className = 'message-option-item';
+    editItem.innerHTML = '<span class="option-icon">✏️</span>编辑';
+    editItem.onclick = () => {
+        editMessage(messageIndex);
+        optionsMenu.remove();
+    };
+    
+    const deleteItem = document.createElement('div');
+    deleteItem.className = 'message-option-item';
+    deleteItem.innerHTML = '<span class="option-icon">🗑️</span>删除';
+    deleteItem.onclick = () => {
+        deleteMessage(messageIndex);
+        optionsMenu.remove();
+    };
+    
+    // 多选模式切换项
+    const multiSelectItem = document.createElement('div');
+    multiSelectItem.className = 'message-option-item';
+    multiSelectItem.innerHTML = '<span class="option-icon">☑️</span>多选';
+    multiSelectItem.onclick = () => {
+        toggleMultiSelectMode();
+        optionsMenu.remove();
+    };
+    
+    // 添加菜单项到菜单
+    optionsMenu.appendChild(editItem);
+    optionsMenu.appendChild(deleteItem);
+    optionsMenu.appendChild(multiSelectItem);
+    
+    // 计算菜单位置
+    const messageRect = messageElement.getBoundingClientRect();
+    const menuWidth = 150;
+    const menuHeight = 120;
+    
+    let left = messageRect.left + messageRect.width / 2 - menuWidth / 2;
+    let top = messageRect.top - menuHeight - 10;
+    
+    // 确保菜单不超出屏幕边界
+    if (left < 10) left = 10;
+    if (left + menuWidth > window.innerWidth - 10) left = window.innerWidth - menuWidth - 10;
+    if (top < 10) top = messageRect.bottom + 10;
+    
+    // 设置菜单位置
+    optionsMenu.style.left = `${left}px`;
+    optionsMenu.style.top = `${top}px`;
+    
+    // 添加到页面
+    document.body.appendChild(optionsMenu);
+    
+    // 点击其他地方关闭菜单
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu(e) {
+            if (!optionsMenu.contains(e.target)) {
+                optionsMenu.remove();
+                document.removeEventListener('click', closeMenu);
+            }
+        });
+    }, 100);
+}
+
+// 渲染单条消息
+function renderSingleMessage(sender, content, messageType = 'text', fileInfo = null, messageIndex = null) {
+    const chatMessages = document.getElementById('chat-messages');
+    
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
-    messageDiv.dataset.messageId = message.id;
-    if (partIndex !== null) {
-        messageDiv.dataset.partIndex = String(partIndex);
-    } else {
-        delete messageDiv.dataset.partIndex;
+    
+    // 为消息添加唯一ID，用于后续编辑和删除
+    if (messageIndex !== null) {
+        messageDiv.setAttribute('data-message-index', messageIndex);
     }
-
-    const messageKey = getMessageKey(message.id, partIndex);
-    messageDiv.dataset.messageKey = messageKey;
-
-    if (selectedMessageKeys.has(messageKey)) {
-        messageDiv.classList.add('selected');
-    }
-
-    const selectIndicator = document.createElement('div');
-    selectIndicator.className = 'message-select-indicator';
-    selectIndicator.textContent = '✓';
-    messageDiv.appendChild(selectIndicator);
-
+    
+    // 普通消息处理
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-
+    
+    // 根据消息类型渲染不同内容
     if (messageType === 'image') {
+        // 图片消息
         const img = document.createElement('img');
-        img.src = displayContent;
+        img.src = content;
         img.alt = '用户发送的图片';
         img.style.maxWidth = '100%';
         img.style.borderRadius = '8px';
         img.style.cursor = 'pointer';
-        img.onclick = () => window.open(displayContent, '_blank');
+        img.onclick = () => window.open(content, '_blank');
         bubble.appendChild(img);
     } else if (messageType === 'file') {
+        // 文件消息
         const fileContainer = document.createElement('div');
         fileContainer.className = 'file-message-container';
-
+        
         const fileIcon = document.createElement('div');
         fileIcon.className = 'file-icon';
         fileIcon.innerHTML = '📄';
-
+        
         const fileDetails = document.createElement('div');
         fileDetails.className = 'file-details';
-
+        
         const fileName = document.createElement('div');
         fileName.className = 'file-name';
-        fileName.textContent = message.fileInfo ? message.fileInfo.name : '未知文件';
-
+        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
+        
         const fileSize = document.createElement('div');
         fileSize.className = 'file-size';
-        fileSize.textContent = message.fileInfo ? formatFileSize(message.fileInfo.size) : '未知大小';
-
+        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
+        
         fileDetails.appendChild(fileName);
         fileDetails.appendChild(fileSize);
-
+        
         fileContainer.appendChild(fileIcon);
         fileContainer.appendChild(fileDetails);
-
+        
+        // 添加点击下载事件
         fileContainer.onclick = () => {
+            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
             alert('这是您上传的文件，无法在聊天界面中下载。');
         };
-
+        
         bubble.appendChild(fileContainer);
     } else {
+        // 文本消息
         if (sender === 'ai') {
-            bubble.innerHTML = marked.parse(displayContent);
-            renderMathInElement(bubble, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                    {left: '\\[', right: '\\]', display: true},
-                    {left: '\\(', right: '\\)', display: false}
-                ],
-                throwOnError: false
-            });
+            // 检查是否是多消息内容，如果是，先分割再渲染
+            const messages = chatHistory[currentCharacterId] || [];
+            const isMultiMessage = messageIndex !== null && 
+                                  messages[messageIndex] && 
+                                  messages[messageIndex].isMultiMessage;
+            
+            if (isMultiMessage) {
+                // 多消息内容，分割后逐条渲染
+                const splitMessages = splitMultiMessages(content);
+                splitMessages.forEach((msg, msgIndex) => {
+                    if (msgIndex > 0) {
+                        // 如果不是第一条消息，添加分隔
+                        const separator = document.createElement('div');
+                        separator.className = 'message-separator';
+                        separator.innerHTML = '<hr>';
+                        bubble.appendChild(separator);
+                    }
+                    
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'multi-message-part';
+                    
+                    // 先渲染Markdown
+                    msgDiv.innerHTML = marked.parse(msg.trim());
+                    
+                    // 然后渲染数学公式
+                    renderMathInElement(msgDiv, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\[', right: '\\]', display: true},
+                            {left: '\\(', right: '\\)', display: false}
+                        ],
+                        throwOnError: false
+                    });
+                    
+                    bubble.appendChild(msgDiv);
+                });
+            } else {
+                // 普通单条消息
+                bubble.innerHTML = marked.parse(content);
+                
+                // 然后渲染数学公式
+                renderMathInElement(bubble, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\[', right: '\\]', display: true},
+                        {left: '\\(', right: '\\)', display: false}
+                    ],
+                    throwOnError: false
+                });
+            }
         } else {
-            bubble.textContent = displayContent;
+            // 用户消息保持纯文本
+            bubble.textContent = content;
         }
     }
-
+    
     messageDiv.appendChild(bubble);
-
-    messageDiv.addEventListener('click', event => {
-        if (!isSelectionMode) {
-            return;
-        }
-
-        if (event.target.closest('a')) {
-            return;
-        }
-
-        event.preventDefault();
-        toggleMessageSelection(messageKey, messageDiv);
+    
+    // 添加双击事件监听器
+    messageDiv.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMessageOptions(messageDiv, sender, messageIndex);
     });
-
-    const startPressHandler = event => handleMessagePressStart(event, messageDiv);
-    messageDiv.addEventListener('touchstart', startPressHandler);
-    messageDiv.addEventListener('touchend', handleMessagePressEnd);
-    messageDiv.addEventListener('touchmove', handleMessagePressCancel);
-    messageDiv.addEventListener('mousedown', event => handleMessagePressStart(event, messageDiv));
-    messageDiv.addEventListener('mouseup', handleMessagePressEnd);
-    messageDiv.addEventListener('mouseleave', handleMessagePressCancel);
-    messageDiv.addEventListener('contextmenu', event => {
-        event.preventDefault();
-        if (!isSelectionMode) {
-            showMessageOptions(messageDiv);
-        }
-    });
-
+    
     chatMessages.appendChild(messageDiv);
-}
-
-function generateMessageId() {
-    return 'msg-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-}
-
-function getMessageKey(messageId, partIndex = null) {
-    return partIndex !== null && partIndex !== undefined ? `${messageId}|${partIndex}` : messageId;
-}
-
-function parseMessageKey(key) {
-    if (!key) {
-        return { messageId: null, partIndex: null };
-    }
-
-    const [messageId, index] = key.split('|');
-    return {
-        messageId,
-        partIndex: index !== undefined ? parseInt(index, 10) : null
-    };
-}
-
-function toggleMessageSelection(key, element) {
-    if (!isSelectionMode || !key) {
-        return;
-    }
-
-    if (selectedMessageKeys.has(key)) {
-        selectedMessageKeys.delete(key);
-        if (element) {
-            element.classList.remove('selected');
-        }
-    } else {
-        selectedMessageKeys.add(key);
-        if (element) {
-            element.classList.add('selected');
-        }
-    }
-
-    updateSelectionUI();
-}
-
-function updateSelectionUI() {
-    const toggleBtn = document.getElementById('selection-toggle-btn');
-    const deleteBtn = document.getElementById('delete-selected-btn');
-
-    if (toggleBtn) {
-        toggleBtn.textContent = isSelectionMode ? '完成' : '选择';
-    }
-
-    if (deleteBtn) {
-        if (isSelectionMode) {
-            deleteBtn.style.display = 'flex';
-            if (selectedMessageKeys.size > 0) {
-                deleteBtn.textContent = `删除(${selectedMessageKeys.size})`;
-                deleteBtn.classList.remove('disabled');
-            } else {
-                deleteBtn.textContent = '删除';
-                deleteBtn.classList.add('disabled');
-            }
-        } else {
-            deleteBtn.style.display = 'none';
-            deleteBtn.classList.remove('disabled');
-        }
-    }
-
-    const chatScreen = document.getElementById('chat-screen');
-    if (chatScreen) {
-        chatScreen.classList.toggle('selection-mode', isSelectionMode);
-    }
-}
-
-function handleMessagePressStart(event, element) {
-    if (isSelectionMode) {
-        return;
-    }
-
-    if (event.type === 'mousedown' && event.button !== 0) {
-        return;
-    }
-
-    clearLongPressTimer();
-    longPressTimer = setTimeout(() => {
-        showMessageOptions(element);
-    }, LONG_PRESS_DURATION);
-}
-
-function handleMessagePressEnd() {
-    clearLongPressTimer();
-}
-
-function handleMessagePressCancel() {
-    clearLongPressTimer();
-}
-
-function clearLongPressTimer() {
-    if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-    }
-}
-
-function showMessageOptions(messageElement) {
-    clearLongPressTimer();
-
-    if (!messageElement) {
-        return;
-    }
-
-    const messageId = messageElement.dataset.messageId;
-    if (!messageId) {
-        return;
-    }
-
-    const partIndexValue = messageElement.dataset.partIndex;
-    const partIndex = partIndexValue !== undefined ? parseInt(partIndexValue, 10) : null;
-    const message = getMessageById(messageId);
-
-    if (!message || message.type === 'system') {
-        return;
-    }
-
-    const choice = prompt('请选择操作：\n1. 编辑\n2. 删除\n3. 多选', '1');
-    if (choice === null) {
-        return;
-    }
-
-    if (choice === '1') {
-        editMessage(messageId, partIndex);
-    } else if (choice === '2') {
-        deleteMessage(messageId, partIndex);
-    } else if (choice === '3') {
-        const key = getMessageKey(messageId, Number.isNaN(partIndex) ? null : partIndex);
-        enterSelectionModeWithMessage(key);
-    }
-}
-
-function getMessageById(messageId) {
-    const messages = chatHistory[currentCharacterId] || [];
-    return messages.find(msg => msg.id === messageId);
-}
-
-function editMessage(messageId, partIndex = null) {
-    const message = getMessageById(messageId);
-    if (!message) {
-        return;
-    }
-
-    if (message.messageType && message.messageType !== 'text') {
-        alert('当前消息类型不支持编辑');
-        return;
-    }
-
-    let currentContent = message.content;
-
-    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
-        const parts = splitMultiMessages(message.content);
-        if (partIndex >= parts.length) {
-            return;
-        }
-        currentContent = parts[partIndex];
-    }
-
-    const newContent = prompt('编辑消息内容', currentContent);
-    if (newContent === null) {
-        return;
-    }
-
-    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
-        const parts = splitMultiMessages(message.content);
-        if (partIndex >= parts.length) {
-            return;
-        }
-
-        if (!newContent.trim()) {
-            if (!confirm('内容为空，将删除该条消息，是否继续？')) {
-                return;
-            }
-
-            if (removeMessage(messageId, partIndex)) {
-                saveChatHistory();
-            }
-        } else {
-            parts[partIndex] = newContent;
-            message.content = parts.join(settings.multiMessageSeparator || '@@@@');
-            saveChatHistory();
-        }
-    } else {
-        if (!newContent.trim()) {
-            if (!confirm('内容为空，将删除该条消息，是否继续？')) {
-                return;
-            }
-
-            if (removeMessage(messageId)) {
-                saveChatHistory();
-            }
-        } else {
-            message.content = newContent;
-            saveChatHistory();
-        }
-    }
-
-    renderChatMessages();
-}
-
-function removeMessage(messageId, partIndex = null) {
-    const messages = chatHistory[currentCharacterId];
-    if (!messages) {
-        return false;
-    }
-
-    const index = messages.findIndex(msg => msg.id === messageId);
-    if (index === -1) {
-        return false;
-    }
-
-    const message = messages[index];
-
-    if (message.isMultiMessage && partIndex !== null && partIndex >= 0) {
-        const parts = splitMultiMessages(message.content);
-        if (partIndex < 0 || partIndex >= parts.length) {
-            return false;
-        }
-
-        parts.splice(partIndex, 1);
-
-        if (parts.length === 0) {
-            messages.splice(index, 1);
-            clearSelectionForMessage(messageId);
-        } else {
-            message.content = parts.join(settings.multiMessageSeparator || '@@@@');
-            adjustSelectionKeysAfterPartDeletion(messageId, partIndex);
-        }
-    } else {
-        messages.splice(index, 1);
-        clearSelectionForMessage(messageId);
-    }
-
-    return true;
-}
-
-function deleteMessage(messageId, partIndex = null) {
-    if (!confirm('确定删除这条消息吗？')) {
-        return;
-    }
-
-    if (removeMessage(messageId, partIndex)) {
-        saveChatHistory();
-        renderChatMessages();
-    }
-}
-
-function deleteSelectedMessages() {
-    if (!isSelectionMode || selectedMessageKeys.size === 0) {
-        return;
-    }
-
-    if (!confirm('确定要删除选中的消息吗？')) {
-        return;
-    }
-
-    const grouped = new Map();
-    selectedMessageKeys.forEach(key => {
-        const { messageId, partIndex } = parseMessageKey(key);
-        if (!messageId) {
-            return;
-        }
-        if (!grouped.has(messageId)) {
-            grouped.set(messageId, []);
-        }
-        grouped.get(messageId).push(partIndex);
-    });
-
-    let changed = false;
-
-    grouped.forEach((indexes, messageId) => {
-        if (indexes.some(index => index === null)) {
-            if (removeMessage(messageId)) {
-                changed = true;
-            }
-            return;
-        }
-
-        indexes
-            .filter(index => index !== null)
-            .sort((a, b) => b - a)
-            .forEach(index => {
-                if (removeMessage(messageId, index)) {
-                    changed = true;
-                }
-            });
-    });
-
-    selectedMessageKeys.clear();
-
-    if (changed) {
-        saveChatHistory();
-        renderChatMessages();
-    } else {
-        updateSelectionUI();
-    }
-}
-
-function clearSelectionForMessage(messageId) {
-    const toRemove = [];
-    selectedMessageKeys.forEach(key => {
-        if (key === messageId || key.startsWith(`${messageId}|`)) {
-            toRemove.push(key);
-        }
-    });
-
-    toRemove.forEach(key => selectedMessageKeys.delete(key));
-}
-
-function adjustSelectionKeysAfterPartDeletion(messageId, removedIndex) {
-    const updated = new Set();
-    selectedMessageKeys.forEach(key => {
-        if (key.startsWith(`${messageId}|`)) {
-            const [, indexStr] = key.split('|');
-            const index = parseInt(indexStr, 10);
-
-            if (Number.isNaN(index) || index === removedIndex) {
-                return;
-            }
-
-            if (index > removedIndex) {
-                updated.add(`${messageId}|${index - 1}`);
-            } else {
-                updated.add(key);
-            }
-        } else {
-            updated.add(key);
-        }
-    });
-
-    selectedMessageKeys = updated;
-    updateSelectionUI();
-}
-
-function toggleSelectionMode() {
-    if (isSelectionMode) {
-        cancelSelectionMode();
-    } else {
-        isSelectionMode = true;
-        selectedMessageKeys.clear();
-        updateSelectionUI();
-        renderChatMessages();
-    }
-}
-
-function cancelSelectionMode(skipRender = false) {
-    const wasSelectionMode = isSelectionMode;
-    isSelectionMode = false;
-    selectedMessageKeys.clear();
-    updateSelectionUI();
-
-    if (wasSelectionMode && !skipRender) {
-        renderChatMessages();
-    }
-}
-
-function enterSelectionModeWithMessage(key) {
-    if (!key) {
-        return;
-    }
-
-    if (!isSelectionMode) {
-        isSelectionMode = true;
-        selectedMessageKeys.clear();
-        selectedMessageKeys.add(key);
-        updateSelectionUI();
-        renderChatMessages();
-    } else {
-        const element = document.querySelector(`[data-message-key="${key}"]`);
-        toggleMessageSelection(key, element);
-    }
 }
 
 // 发送消息
@@ -1279,14 +1336,18 @@ async function callAIForResponse(message) {
         
         // 如果有多条消息，将它们作为一个整体保存，但标记为多消息
         if (messages.length > 1) {
-            const savedMessage = addMessage('ai', response, { isMultiMessage: true });
-
+            // 保存原始响应内容，但标记为多消息
+            addMessage('ai', response, { isMultiMessage: true });
+            
+            // 逐条显示消息
             for (let i = 0; i < messages.length; i++) {
+                // 如果不是第一条消息，添加延迟
                 if (i > 0) {
                     await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5秒延迟
                 }
-
-                addMessageToDOM(savedMessage, messages[i].trim(), i);
+                
+                // 直接添加到DOM，不保存到聊天历史
+                addMessageToDOM('ai', messages[i].trim(), 'text');
             }
         } else {
             // 只有一条消息，正常处理
@@ -1294,7 +1355,10 @@ async function callAIForResponse(message) {
         }
     } catch (error) {
         // 移除等待状态
-        document.getElementById('waiting-message').remove();
+        const waitingElement = document.getElementById('waiting-message');
+        if (waitingElement) {
+            waitingElement.remove();
+        }
         
         // 添加错误消息，包含所有重试尝试的错误信息
         let errorMessage = '抱歉，发生了错误：' + error.message;
@@ -1424,47 +1488,109 @@ function addMessage(sender, content, options = {}) {
     if (!chatHistory[currentCharacterId]) {
         chatHistory[currentCharacterId] = [];
     }
-
-    const message = {
+    
+    chatHistory[currentCharacterId].push({
         sender: sender,
         content: content,
         timestamp: new Date().toISOString(),
         messageType: options.messageType || 'text',
         fileInfo: options.fileInfo || null,
-        ...options
-    };
-
-    if (!message.id) {
-        message.id = generateMessageId();
-    }
-
-    chatHistory[currentCharacterId].push(message);
-
+        ...options // 添加额外的选项，如isMultiMessage标记
+    });
+    
     saveChatHistory();
-
-    if (message.isMultiMessage) {
-        return message;
-    }
-
-    renderChatMessages();
-    return message;
-}
-
-function addMessageToDOM(message, displayContent, partIndex = null) {
-    if (!message) {
+    
+    // 如果是多消息，不立即渲染，因为会通过addMessageToDOM逐条添加
+    if (options.isMultiMessage) {
         return;
     }
+    
+    renderChatMessages();
+}
 
-    renderSingleMessage(message, {
-        displayContent: displayContent,
-        partIndex: typeof partIndex === 'number' ? partIndex : null,
-        messageType: message.messageType || 'text'
-    });
-
+// 直接添加消息到DOM，不保存到聊天历史
+function addMessageToDOM(sender, content, messageType = 'text', fileInfo = null) {
     const chatMessages = document.getElementById('chat-messages');
-    if (chatMessages) {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${sender}`;
+    
+    // 普通消息处理
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    
+    // 根据消息类型渲染不同内容
+    if (messageType === 'image') {
+        // 图片消息
+        const img = document.createElement('img');
+        img.src = content;
+        img.alt = '用户发送的图片';
+        img.style.maxWidth = '100%';
+        img.style.borderRadius = '8px';
+        img.style.cursor = 'pointer';
+        img.onclick = () => window.open(content, '_blank');
+        bubble.appendChild(img);
+    } else if (messageType === 'file') {
+        // 文件消息
+        const fileContainer = document.createElement('div');
+        fileContainer.className = 'file-message-container';
+        
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'file-icon';
+        fileIcon.innerHTML = '📄';
+        
+        const fileDetails = document.createElement('div');
+        fileDetails.className = 'file-details';
+        
+        const fileName = document.createElement('div');
+        fileName.className = 'file-name';
+        fileName.textContent = fileInfo ? fileInfo.name : '未知文件';
+        
+        const fileSize = document.createElement('div');
+        fileSize.className = 'file-size';
+        fileSize.textContent = fileInfo ? formatFileSize(fileInfo.size) : '未知大小';
+        
+        fileDetails.appendChild(fileName);
+        fileDetails.appendChild(fileSize);
+        
+        fileContainer.appendChild(fileIcon);
+        fileContainer.appendChild(fileDetails);
+        
+        // 添加点击下载事件
+        fileContainer.onclick = () => {
+            // 对于文件消息，我们需要创建一个提示，因为无法直接下载用户选择的文件
+            alert('这是您上传的文件，无法在聊天界面中下载。');
+        };
+        
+        bubble.appendChild(fileContainer);
+    } else {
+        // 文本消息
+        if (sender === 'ai') {
+            // 先渲染Markdown
+            bubble.innerHTML = marked.parse(content);
+            
+            // 然后渲染数学公式
+            renderMathInElement(bubble, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                    {left: '\\[', right: '\\]', display: true},
+                    {left: '\\(', right: '\\)', display: false}
+                ],
+                throwOnError: false
+            });
+        } else {
+            // 用户消息保持纯文本
+            bubble.textContent = content;
+        }
     }
+    
+    messageDiv.appendChild(bubble);
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // 滚动到底部
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 // 调用AI API
@@ -1515,13 +1641,16 @@ async function callAIAPI(message) {
             const base64Data = imageDataUrl.split(',')[1];
             const mimeType = imageDataUrl.split(';')[0].split(':')[1];
             
+            // 获取最后一个用户消息的内容
+            const lastMessageContent = messages[lastUserMessageIndex].content;
+            
             // 修改消息格式以支持图片
             messages[lastUserMessageIndex] = {
                 role: 'user',
                 content: [
                     {
                         type: 'text',
-                        text: '[用户发送了图片，请分析图片内容]'
+                        text: lastMessageContent
                     },
                     {
                         type: 'image_url',
@@ -2377,6 +2506,43 @@ function clearCurrentCharacterChat() {
     alert('聊天记录已清空');
 }
 
+// 删除当前角色
+function deleteCurrentCharacter() {
+    if (!currentCharacterId) return;
+    
+    const character = characters.find(c => c.id === currentCharacterId);
+    if (!character) return;
+    
+    // 确认操作
+    if (!confirm(`确定要删除角色"${character.name}"吗？此操作将同时删除该角色及其所有聊天记录，且不可撤销。`)) {
+        return;
+    }
+    
+    // 从characters数组中删除角色
+    const index = characters.findIndex(c => c.id === currentCharacterId);
+    if (index !== -1) {
+        characters.splice(index, 1);
+        saveCharacters(); // 保存到localStorage
+    }
+    
+    // 从chatHistory中删除角色的聊天记录
+    if (chatHistory[currentCharacterId]) {
+        delete chatHistory[currentCharacterId];
+        saveChatHistory(); // 保存到localStorage
+    }
+    
+    // 重置当前角色ID
+    currentCharacterId = null;
+    
+    // 关闭模态框
+    closeEditCharacterModal();
+    
+    // 返回角色列表界面
+    showCharacterList();
+    
+    alert(`角色"${character.name}"已删除`);
+}
+
 // 聊天菜单相关功能
 // 切换聊天菜单显示/隐藏
 function toggleChatMenu() {
@@ -2410,12 +2576,16 @@ async function sendImage() {
     // 隐藏菜单
     document.getElementById('chat-menu').classList.remove('show');
     
-    // 创建文件输入元素
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
+    // 获取用户输入的消息
+    const input = document.getElementById('chat-input');
+    const userMessage = input.value.trim();
     
-    input.onchange = async function(e) {
+    // 创建文件输入元素
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    
+    fileInput.onchange = async function(e) {
         const file = e.target.files[0];
         if (file) {
             // 检查文件大小
@@ -2438,10 +2608,16 @@ async function sendImage() {
                     }
                 });
                 
+                // 清空输入框
+                input.value = '';
+                
+                // 构建消息内容，如果用户有输入文本，则使用用户输入的文本，否则使用默认提示
+                const messageText = userMessage || '[用户发送了图片，请分析图片内容]';
+                
                 // 调用AI处理图片
                 if (settings.enableDelaySend) {
                     // 添加消息到待发送列表
-                    pendingMessages.push('[用户发送了图片，请分析图片内容]');
+                    pendingMessages.push(messageText);
                     
                     // 重置计时器
                     if (messageDelayTimer) {
@@ -2454,7 +2630,7 @@ async function sendImage() {
                     }, settings.replyDelay * 1000);
                 } else {
                     // 如果未启用延迟发送，直接发送消息
-                    await callAIForResponse('[用户发送了图片，请分析图片内容]');
+                    await callAIForResponse(messageText);
                 }
             };
             
@@ -2462,7 +2638,7 @@ async function sendImage() {
         }
     };
     
-    input.click();
+    fileInput.click();
 }
 
 // 发送文件

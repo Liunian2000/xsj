@@ -67,11 +67,7 @@
             <div class="header">
                 <span class="back-btn" onclick="showScreen('character-list-screen')">‹</span>
                 <span id="chat-character-name">角色名称</span>
-                <div class="header-actions">
-                    <span class="action-btn" id="selection-toggle-btn" onclick="toggleSelectionMode()">选择</span>
-                    <span class="action-btn" id="delete-selected-btn" onclick="deleteSelectedMessages()">删除</span>
-                    <span class="action-btn" onclick="showEditCharacterModal()">编辑</span>
-                </div>
+                <span class="action-btn" onclick="showEditCharacterModal()">编辑</span>
             </div>
             <div id="chat-messages" class="chat-messages">
                 <!-- 聊天消息将在这里动态生成 -->
@@ -412,7 +408,7 @@
                     </div>
                     <div class="info-item">
                         <span class="info-label">当前版本：</span>
-                        <span class="info-value">2.1.9</span>
+                        <span class="info-value">2.2.4</span>
                     </div>
                     <div class="info-item">
                         <span class="info-label">Q群：</span>
@@ -461,6 +457,7 @@
                     <button class="cancel" onclick="closeEditCharacterModal()">取消</button>
                     <button class="save" onclick="saveEditedCharacter()">保存</button>
                     <button class="btn-danger" onclick="clearCurrentCharacterChat()" style="margin-left: 10px;">清空聊天记录</button>
+                    <button class="btn-danger" onclick="deleteCurrentCharacter()" style="margin-left: 10px;">删除人设</button>
                 </div>
             </div>
         </div>
